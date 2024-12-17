@@ -1,0 +1,8 @@
+.idea/
+.venv
+.env
+
+**.mp3
+**.mp4
+**.srt
+**.txt
