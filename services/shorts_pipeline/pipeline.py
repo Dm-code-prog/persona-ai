@@ -48,15 +48,16 @@ class ShortVideoPipeline:
 
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def run(self, script_promts: str):
+    def run(self, script_promts: str)-> str:
         script, tags = self.generate_script(script_promts)
 
         speech_file_path, srt_file = self.text_to_speech(script)
         footage_file_paths = self.get_footage_for_tags(tags)
 
-        self.create_video(speech_file_path, srt_file, footage_file_paths)
+        output_path = self.create_video(speech_file_path, srt_file, footage_file_paths)
+        return output_path
 
-    def create_video(self, speech_path: str, subs_path: str, footage_paths: list[str]):
+    def create_video(self, speech_path: str, subs_path: str, footage_paths: list[str]) -> str:
         # Ensure all paths are absolute
         speech_path = os.path.abspath(speech_path)
         footage_paths = [os.path.abspath(path) for path in footage_paths]

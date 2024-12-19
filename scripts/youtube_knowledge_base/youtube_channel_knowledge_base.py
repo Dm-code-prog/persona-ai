@@ -1,6 +1,5 @@
 import os
 
-import googleapiclient.discovery
 from dotenv import load_dotenv
 
 from services.youtube_knowledge_base.download_youtube_captions import YoutubeService

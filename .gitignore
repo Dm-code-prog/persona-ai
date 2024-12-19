@@ -6,3 +6,7 @@
 **.mp4
 **.srt
 **.txt
+
+http/
+
+node_modules/
