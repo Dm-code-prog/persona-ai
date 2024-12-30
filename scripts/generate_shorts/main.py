@@ -1,8 +1,10 @@
+import json
 import os
 
 from dotenv import load_dotenv
 
-from scripts.generate_shorts.prompt import prompt
+from scripts.generate_shorts.script_prompt import prompt, get_script_prompt
+from services.shorts_pipeline.ass import generate_ass_with_highlights, group_characters_into_words
 from services.shorts_pipeline.pipeline import ShortVideoPipeline
 
 load_dotenv()
@@ -27,15 +29,32 @@ def main():
         pexels_api_key=pexels_api_key,
     )
 
-    # pipeline.run(prompt)
+    topic = input("Enter the video topic")
+    prompt = get_script_prompt(topic)
 
-    footage_paths = pipeline.get_footage_for_tags(['morning workout', 'quick exercise', 'energized person', 'health'])
+    # timings_dict = json.load(open('output/eleven_labs_ts_dict.json'))
+    # generate_ass_with_highlights(timings_dict, 'output/subtitles.ass')
 
-    pipeline.create_video(
-        speech_path='output/elevenlabs_script.mp3',
-        subs_path='output/subtitles.srt',
-        footage_paths=footage_paths
-    )
+    pipeline.run(prompt)
+
+    # pipeline.create_video(
+    #     '/Users/kozlovdmitriy/dev/persona_ai_project/persona_ai/scripts/generate_shorts/output/elevenlabs_script.mp3',
+    #     '/Users/kozlovdmitriy/dev/persona_ai_project/persona_ai/scripts/generate_shorts/output/subtitles.ass',
+    #     [
+    #         'output/pexels_footage_bodyweight exercises_0.mp4',
+    #         'output/pexels_footage_bodyweight exercises_1.mp4',
+    #         'output/pexels_footage_bodyweight exercises_2.mp4',
+    #         'output/pexels_footage_bodyweight exercises_3.mp4',
+    #         'output/pexels_footage_mental toughness_0.mp4',
+    #         'output/pexels_footage_mental toughness_1.mp4',
+    #         'output/pexels_footage_mental toughness_2.mp4',
+    #         'output/pexels_footage_mental toughness_3.mp4',
+    #         'output/pexels_footage_Navy SEAL training_0.mp4',
+    #         'output/pexels_footage_Navy SEAL training_1.mp4',
+    #         'output/pexels_footage_Navy SEAL training_2.mp4',
+    #         'output/pexels_footage_Navy SEAL training_3.mp4',
+    #     ]
+    # )
 
 
 if __name__ == "__main__":
