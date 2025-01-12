@@ -1,11 +1,11 @@
-import json
 import os
+import time
 
 from dotenv import load_dotenv
 
+from scripts.generate_shorts.script_2nd_shot_prompt import get_2shot_script_prompt
 from scripts.generate_shorts.script_prompt import get_script_prompt
-from services.shorts_pipeline.ass import generate_ass_with_highlights, group_characters_into_words
-from services.shorts_pipeline.pipeline import ShortVideoPipeline
+from services.pipelines.general.old_pipeline import ShortVideoPipeline
 
 load_dotenv()
 
@@ -29,32 +29,31 @@ def main():
         pexels_api_key=pexels_api_key,
     )
 
-    # topic = input("Enter the video topic")
-    # prompt = get_script_prompt(topic)
+    topic = input("Enter the video topic:\n")
 
-    # timings_dict = json.load(open('output/eleven_labs_ts_dict.json'))
-    # generate_ass_with_highlights(timings_dict, 'output/subtitles.ass')
+    start = time.time()
 
-    # pipeline.run(prompt)
-
-    pipeline.create_video(
-        '/Users/kozlovdmitriy/dev/persona_ai_project/persona_ai/scripts/generate_shorts/output/elevenlabs_script.mp3',
-        '/Users/kozlovdmitriy/dev/persona_ai_project/persona_ai/scripts/generate_shorts/output/subtitles.ass',
-        [
-            'output/pexels_footage_bodyweight exercises_0.mp4',
-            'output/pexels_footage_bodyweight exercises_1.mp4',
-            'output/pexels_footage_bodyweight exercises_2.mp4',
-            'output/pexels_footage_bodyweight exercises_3.mp4',
-            'output/pexels_footage_mental toughness_0.mp4',
-            'output/pexels_footage_mental toughness_1.mp4',
-            'output/pexels_footage_mental toughness_2.mp4',
-            'output/pexels_footage_mental toughness_3.mp4',
-            'output/pexels_footage_Navy SEAL training_0.mp4',
-            'output/pexels_footage_Navy SEAL training_1.mp4',
-            'output/pexels_footage_Navy SEAL training_2.mp4',
-            'output/pexels_footage_Navy SEAL training_3.mp4',
-        ]
+    script = pipeline.generate_script(
+        get_script_prompt(topic)
     )
+    script_2nd_shot = pipeline.generate_script_2nd_shot(
+        get_2shot_script_prompt(script)
+    )
+
+    speech_file, words, sentences = pipeline.text_to_speech(script_2nd_shot)
+
+    script_with_footages = pipeline.generate_script_with_footages(script_2nd_shot)
+
+    footages = pipeline.get_footages(script=script_with_footages, words=words)
+
+    pipeline.edit_video(
+        speech_file,
+        footages,
+        sentences,
+    )
+
+    end = time.time()
+    print(f"⌛ Generated a video in {end - start} seconds")
 
 
 if __name__ == "__main__":
