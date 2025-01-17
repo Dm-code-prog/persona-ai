@@ -3,7 +3,6 @@ import os
 
 from dotenv import load_dotenv
 
-from services.pipelines.subtitles import add_subtitles, group_words_into_sentences, group_chars_into_words
 from services.pipelines.top5_generator.pipeline import TOP5Pipeline
 
 load_dotenv()
