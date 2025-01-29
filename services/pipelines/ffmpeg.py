@@ -1,3 +1,4 @@
+import json
 import shlex
 import subprocess
 import platform
@@ -90,6 +91,71 @@ def get_gpu_accelerated_h264_encoder():
         return None
 
 
+def get_gpu_accelerated_aac_encoder():
+    """
+    Detects the available hardware-accelerated AAC encoder on the current platform.
+
+    Returns:
+        str: The name of the hardware-accelerated AAC encoder, or None if not found.
+    """
+    try:
+        # Run FFmpeg to list all encoders
+        result = subprocess.run(
+            ["ffmpeg", "-encoders"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        encoders = result.stdout.splitlines()
+        hw_aac_encoders = []
+
+        # Identify OS to determine likely hardware-accelerated AAC encoders
+        os_name = platform.system()
+
+        # Possible hardware-accelerated AAC encoders by OS
+        if os_name == "Darwin":  # macOS
+            # AudioToolbox-based AAC is typically labeled 'aac_at'
+            search_terms = ["aac_at"]
+        elif os_name == "Windows":
+            # Windows Media Foundation-based AAC might appear as 'aac_mf'
+            search_terms = ["aac_mf"]
+        else:
+            # For Linux or other OS, hardware-accelerated AAC is uncommon;
+            # you could add any known encoders here.
+            search_terms = []
+
+        # Look for matching encoders in the output
+        for line in encoders:
+            # Each line has a format like:
+            #   " V..... aac               AAC (Advanced Audio Coding) (Encoders: ...)
+            # We'll check if any search term is in that line.
+            if any(term in line for term in search_terms):
+                # Typically, the second token is the encoder name, e.g. 'aac_at'
+                # But confirm by splitting.
+                parts = line.split()
+                # We expect something like ["A.....", "aac_at", "some", "description..."]
+                # The first part might be flags (A=audio encoder, V=video, etc.).
+                # The second part should be the encoder name.
+                if len(parts) > 1:
+                    encoder_name = parts[1]
+                    hw_aac_encoders.append(encoder_name)
+
+        if hw_aac_encoders:
+            print(f"✅ HW-Accelerated AAC Encoder(s) Found: {', '.join(hw_aac_encoders)}")
+            return hw_aac_encoders[0]  # Return the first found
+        else:
+            print("❌ No hardware-accelerated AAC encoder found (or not supported).")
+            return None
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running FFmpeg: {e}")
+        return None
+    except FileNotFoundError:
+        print("❌ FFmpeg is not installed or not in PATH.")
+        return None
+
+
 def get_media_duration(file_path: str) -> float:
     """
     Get the duration of a media file using FFprobe.
@@ -133,6 +199,26 @@ def get_media_duration(file_path: str) -> float:
     except FileNotFoundError:
         print("❌ FFprobe is not installed or not in PATH.")
         return 0
+
+
+def has_video_track(media_path: str) -> bool:
+    """
+    Check if the input file has a video track (stream).
+    """
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "stream=codec_type",
+        "-of", "json",
+        media_path
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    info = json.loads(res.stdout)
+    streams = info.get("streams", [])
+    for s in streams:
+        if s.get("codec_type") == "video":
+            return True
+    return False
 
 
 def format_youtube_short_video(video_path: str, clip_length: float, video_encoder: str, output_path: str):
@@ -273,21 +359,27 @@ def loop_video(video_path: str, loop_count: int, output_path: str):
         raise RuntimeError(f"ffmpeg command failed with error: {e.stderr}")
 
 
-def trim_pauses_from_audio(
-        audio_file_path: str,
+def trim_pauses_from_media(
+        media_path: str,
         pauses: list[dict],
-        output_path: str
+        output_path: str,
+        video_codec: str = "libx264",
+        audio_codec: str = "aac"
 ) -> None:
     """
     Removes the specified pauses from an audio file, producing a shorter output.
 
-    :param audio_file_path: Path to the source audio.
+    :param video_codec:
+    :param audio_codec:
+    :param media_path: Path to the source audio.
     :param pauses: A list of dicts, each with {"start": float, "end": float} in seconds,
                    indicating the regions to remove. They need not be sorted; we sort them.
     :param output_path: Where to save the trimmed audio.
     """
     # 1) Get the total duration of the audio
-    total_duration = get_media_duration(audio_file_path)
+    total_duration = get_media_duration(media_path)
+
+    has_video = has_video_track(media_path)
 
     # 2) Sort pauses by start time (in case they're not already)
     sorted_pauses = sorted(pauses, key=lambda p: p["start"])
@@ -313,38 +405,57 @@ def trim_pauses_from_audio(
     if not keep_intervals:
         raise ValueError("No intervals to keep. The output audio would be empty.")
 
-    # 4) Build the filter_complex expression
-    #
-    # We create one atrim segment per keep interval, each labeled [sN],
-    # then we concat them all into [outa].
     filter_segments = []
     for i, (start, end) in enumerate(keep_intervals):
-        segment_label = f"[s{i}]"
-        # Use asetpts to reset timestamps within each segment
+        if has_video:
+            filter_segments.append(
+                f"[0:v]trim=start={start}:end={end},setpts=PTS-STARTPTS[sv_{i}]"
+            )
         filter_segments.append(
-            f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS{segment_label}"
+            f"[0:a]atrim=start={start}:end={end},asetpts=PTS-STARTPTS[sa_{i}]"
         )
 
-    # Then we reference them all in one concat filter
-    concat_inputs = "".join(f"[s{i}]" for i in range(len(keep_intervals)))
-    concat_command = f"{concat_inputs}concat=n={len(keep_intervals)}:v=0:a=1[outa]"
+    # Build the concat line
+    if has_video:
+        sv_streams = "".join(f"[sv_{i}][sa_{i}]" for i in range(len(keep_intervals)))
+        concat_command = (
+            f"{sv_streams}concat=n={len(keep_intervals)}:v=1:a=1[outv][outa]"
+        )
+    else:
+        sa_streams = "".join(f"[sa_{i}]" for i in range(len(keep_intervals)))
+        concat_command = (
+            f"{sa_streams}concat=n={len(keep_intervals)}:v=0:a=1[outa]"
+        )
 
-    # Combine all into a single filter_complex string
+    # Combine into a single filter_complex
     filter_complex = ";".join(filter_segments + [concat_command])
 
-    # 5) Construct and run the ffmpeg command
     cmd = [
-        "ffmpeg", "-y",
+        "ffmpeg",
+        "-y",
         "-hide_banner",
         "-loglevel", "warning",
-        "-i", audio_file_path,
+        "-i", media_path,
         "-filter_complex", filter_complex,
-        "-map", "[outa]",
-        # Use any preferred audio codec and bitrate
-        "-c:a", "aac",
-        "-b:a", "192k",
-        output_path
     ]
+
+    if has_video:
+        cmd += [
+            "-map", "[outv]",
+            "-map", "[outa]",
+            "-c:v", video_codec,
+            "-c:a", audio_codec,
+            "-b:a", "192k",
+            output_path
+        ]
+    else:
+        # Audio-only
+        cmd += [
+            "-map", "[outa]",
+            "-c:a", audio_codec,
+            "-b:a", "192k",
+            output_path
+        ]
 
     print("Running FFmpeg command:")
     print(" ".join(shlex.quote(c) for c in cmd))

@@ -1,10 +1,6 @@
 import os
 import subprocess
-from typing import List, Tuple
-
 import openai
-
-import services.pipelines.ffmpeg as ffmpeg
 
 
 class LongToShortsPipeline:

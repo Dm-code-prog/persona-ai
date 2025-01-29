@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import logging
 import math
 import os
 import time
@@ -15,69 +16,90 @@ import services.pipelines.ffmpeg as ffmpeg
 import services.pipelines.pause_detector as pause
 
 
+class TOP5PipelineConfig:
+    background_video: str = None
+    background_music: str = None
+    video_effect: str = None
+
+    places_videos: list[str] = []
+
+    def __init__(self, background_video: str, background_music: str, video_effect: str, places_videos: list[str]):
+        self.background_video = background_video
+        self.background_music = background_music
+        self.video_effect = video_effect
+        self.places_videos = places_videos
+
+    def validate(self):
+        if not self.video_effect or not self.background_video or not self.background_music:
+            raise ValueError("Missing required configuration")
+
+        if not self.video_effect.endswith('.mp4'):
+            raise ValueError("Video effect must be an MP4 file")
+
+        if not self.background_video.endswith('.mp4'):
+            raise ValueError("Background video must be an MP4 file")
+
+        if not self.background_music.endswith('.mp3') and not self.background_music.endswith('.mp4'):
+            raise ValueError("Background music must be an MP3 or MP4 file")
+
+
 class TOP5Pipeline:
     elevenlabs_client: ElevenLabs = None
 
+    logger: logging.Logger = None
+
+    config: TOP5PipelineConfig = None
+
     working_dir: str = None
 
-    def __init__(self, elevenlaps_api_key: str, working_dir: str):
+    def __init__(self, logger: logging.Logger, config: TOP5PipelineConfig, elevenlaps_api_key: str, working_dir: str):
         self.elevenlabs_client = ElevenLabs(api_key=elevenlaps_api_key)
         self.working_dir = working_dir
-
-        os.makedirs(os.path.join(self.working_dir, 'output'), exist_ok=True)
+        self.logger = logger
+        self.config = config
 
     def assert_working_dir(self):
         if not os.path.exists(self.working_dir):
             raise FileNotFoundError(f"Working directory not found: {self.working_dir}")
 
-        video_names = os.listdir(os.path.join(self.working_dir, 'input', 'videos'))
-        assert "background.mp4" in video_names
+        background_video = os.path.join(self.working_dir, 'input', 'videos', self.config.background_video)
 
-        video_names.remove('background.mp4')
-        for video in video_names:
-            if not video.endswith('.mp4'):
-                video_names.remove(video)
+        background_music = os.path.join(self.working_dir, 'input', 'music', self.config.background_music)
+        effect = os.path.join(self.working_dir, 'input', 'video_effects', self.config.video_effect)
+        videos = [os.path.join(self.working_dir, 'input', 'videos', video) for video in self.config.places_videos]
 
-        assert len(video_names) == 5
+        if not os.path.exists(background_video):
+            raise FileNotFoundError(f"Background video not found: {background_video}")
 
-        # photo_names = os.listdir("input/photos")
-        # assert "intro.png" in photo_names or "intro.jpg" in photo_names
-        # assert len(photo_names) > 0
-        # intro_photo_name = "intro.png" if "intro.png" in photo_names else "intro.jpg"
+        if not os.path.exists(background_music):
+            raise FileNotFoundError(f"Background music not found: {background_music}")
 
-        music_names = os.listdir(os.path.join(self.working_dir, 'input', 'music'))
-        music_names = [name for name in music_names if name.endswith('.mp3') or name.endswith('.mp4')]
-        assert len(music_names) > 0
-        background_music_name = music_names[0]
+        if not os.path.exists(effect):
+            raise FileNotFoundError(f"Video effect not found: {effect}")
 
-        script_names = os.listdir(os.path.join(self.working_dir, 'input', 'scripts'))
-        assert "script.txt" in script_names
-        script_name = "script.txt"
+        for video_name in videos:
+            if not os.path.exists(video_name):
+                raise FileNotFoundError(f"Places video not found: {video_name}")
 
-        effect_names = os.listdir(os.path.join(self.working_dir, 'input', 'effects'))
-        assert "particles.mp4" in effect_names
-
-        video_paths = [os.path.join(self.working_dir, 'input', 'videos', name) for name in video_names]
-        background_video_path = os.path.join(self.working_dir, 'input', 'videos', 'background.mp4')
-        background_music_path = os.path.join(self.working_dir, 'input', 'music', background_music_name)
-        script_path = os.path.join(self.working_dir, 'input', 'scripts', script_name)
-        effect_path = os.path.join(self.working_dir, 'input', 'effects', 'particles.mp4')
-
-        return video_paths, background_video_path, background_music_path, script_path, effect_path
-
-    def run(self, subtitle_color: str = 'white', subtitle_highlight_color: str = '#7710e2',
-            background_music_volume_adjustment: int = -25):
+    def run(self,
+            script: str,
+            subtitle_color: str = 'white',
+            subtitle_highlight_color: str = '#7710e2',
+            background_music_volume_adjustment: int = -25
+            ):
 
         start = time.time()
 
-        video_names, background_video_path, background_music_name, script_name, effect_path = self.assert_working_dir()
+        self.assert_working_dir()
+
+        background_video_path = os.path.join(self.working_dir, 'input', 'videos', self.config.background_video)
+        background_music_name = os.path.join(self.working_dir, 'input', 'music', self.config.background_music)
+        effect_path = os.path.join(self.working_dir, 'input', 'video_effects', self.config.video_effect)
+        video_names = [os.path.join(self.working_dir, 'input', 'videos', video) for video in self.config.places_videos]
 
         h264_encoder = ffmpeg.get_gpu_accelerated_h264_encoder()
         if h264_encoder is None:
             h264_encoder = 'libx264'
-
-        with open(script_name, 'r') as f:
-            script = f.read()
 
         # 2. Generate speech using Eleven Labs
         speech_file, words = self.text_to_speech(script)
@@ -88,11 +110,11 @@ class TOP5Pipeline:
             threshold=0.4,
             pad=0.075
         )
-        print(f"ℹ️ Detected {len(pauses)} pauses")
+        self.logger.info(f"ℹ️ Detected {len(pauses)} pauses")
 
         # 4. Trim the pauses
         no_pauses_file = os.path.join(self.working_dir, 'output', 'no_pauses_speech.mp4')
-        ffmpeg.trim_pauses_from_audio(speech_file, pauses, no_pauses_file)
+        ffmpeg.trim_pauses_from_media(speech_file, pauses, no_pauses_file)
 
         # 5. Build the sentences
         sentences = subs.group_words_into_sentences(words)
@@ -110,7 +132,7 @@ class TOP5Pipeline:
                 loop_count=math.ceil(footage_segments['script_end'] / background_video_duration),
             )
             background_video_path = looped_background_path
-            print("✅ Looped background video")
+            self.logger.info("✅ Looped background video to match the script duration")
 
         # 8. Create audio-less edit
         video_edit_path = os.path.join(self.working_dir, 'output', 'video_edit.mp4')
@@ -130,7 +152,7 @@ class TOP5Pipeline:
             encoder=h264_encoder,
             output_path=with_speech_path
         )
-        print("✅ Added speech to the edit")
+        self.logger.info("✅ Added speech to the edit")
 
         # 10. Add subtitles to the edit
         with_subtitles_path = os.path.join(self.working_dir, 'output', 'video_with_subtitles.mp4')
@@ -142,7 +164,7 @@ class TOP5Pipeline:
             highlight_color=subtitle_highlight_color,
             color=subtitle_color
         )
-        print("✅ Generated video with subtitles")
+        self.logger.info("✅ Generated video with subtitles")
 
         # 11. Add background music to the edit
         with_music_path = os.path.join(self.working_dir, 'output', 'video_with_music.mp4')
@@ -164,14 +186,13 @@ class TOP5Pipeline:
             output_path=with_effects_path
         )
 
-        print("✅ Added background music to the edit")
+        self.logger.info("✅ Added background music to the edit")
 
         end = time.time()
 
-        print(f"⌛ Generated a video in {end - start} seconds")
+        self.logger.info(f"⌛ Generated a video in {end - start} seconds")
 
-    @staticmethod
-    def overlay_footages(video_segments: list[dict[str, any]], background_video_path: str, output_path: str,
+    def overlay_footages(self, video_segments: list[dict[str, any]], background_video_path: str, output_path: str,
                          duration: float,
                          video_encoder: str):
         background_video_fmt_path = os.path.join(os.path.dirname(output_path), 'background_fmt.mp4')
@@ -181,7 +202,7 @@ class TOP5Pipeline:
             video_encoder=video_encoder,
             output_path=background_video_fmt_path
         )
-        print("✅ Formatted background video")
+        self.logger.info("✅ Formatted background video")
 
         fmt_segments: list[dict[str, any]] = []
         for segment in video_segments:
@@ -192,7 +213,7 @@ class TOP5Pipeline:
                 video_encoder=video_encoder,
                 output_path=fmt_segment_path
             )
-            print(f"✅ Formatted video segment: {segment['footage']}")
+            self.logger.info(f"✅ Formatted video segment: {segment['footage']}")
 
             fmt_segments.append({
                 "footage": fmt_segment_path,
@@ -207,7 +228,7 @@ class TOP5Pipeline:
             video_encoder=video_encoder
         )
 
-        print("✅ Overlayed video footages")
+        self.logger.info("✅ Overlayed video footages")
 
         os.remove(background_video_fmt_path)
         for segment in fmt_segments:
@@ -242,7 +263,7 @@ class TOP5Pipeline:
         # 2) Check if cached files exist. If yes, reuse them; if not, call TTS
         # ----------------------------------------------------------------
         if os.path.exists(speech_file) and os.path.exists(alignment_file):
-            print(f"✅ Using cached ElevenLabs speech for hash: {script_hash}")
+            self.logger.info(f"✅ Using cached ElevenLabs speech for hash: {script_hash}")
 
             # Read alignment JSON
             with open(alignment_file, 'r') as f:
@@ -257,7 +278,7 @@ class TOP5Pipeline:
             sentences = subs.group_words_into_sentences(words)
 
         else:
-            print("⌛ No cached version found. Generating fresh speech using ElevenLabs...")
+            self.logger.info("⌛ No cached version found. Generating fresh speech using ElevenLabs...")
 
             # 3) Call ElevenLabs for TTS
             audio = self.elevenlabs_client.text_to_speech.convert_with_timestamps(
@@ -290,7 +311,7 @@ class TOP5Pipeline:
                 alignment['character_start_times_seconds'],
                 alignment['character_end_times_seconds']
             )
-            print("✅ Generated new speech and alignment from ElevenLabs")
+            self.logger.info("✅ Generated new speech and alignment from ElevenLabs")
 
         # Return paths and data
         return speech_file, words

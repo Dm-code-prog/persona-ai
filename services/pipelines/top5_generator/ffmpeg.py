@@ -84,5 +84,3 @@ def overlay_videos(background_footage_path, footages, output_path, video_encoder
 
     # 6) Execute the ffmpeg process
     subprocess.run(cmd, check=True)
-
-    print(f"Done! Final video at: {output_path}")

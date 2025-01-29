@@ -26,3 +26,4 @@ moviepy~=2.1.1
 pytest~=8.3.4
 SQLAlchemy~=2.0.37
 platformdirs~=4.3.6
+openai-whisper~=20240930
