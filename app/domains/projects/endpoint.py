@@ -39,7 +39,6 @@ async def create_new_project(request: CreateNewProjectRequest, db: orm.Session =
     os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'video_effects'))
     os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'sound_effects'))
 
-
     os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'output'))
 
     return {
@@ -136,10 +135,9 @@ async def upload_project_file(
 @router.get('/{project_id}/files/download', tags=['Projects'])
 def download_file(
         project_id: str,
-        file_name: str = fastapi.Query(...),
-        file_type: str = fastapi.Query(...),
+        file_path: str
 ):
-    file_path = os.path.join(MEDIA_PATH, 'projects', str(project_id), file_type_to_folder(file_type), file_name)
+    file_path = os.path.join(MEDIA_PATH, 'projects', str(project_id), file_path)
     return responses.FileResponse(path=file_path)
 
 
@@ -174,6 +172,7 @@ def list_files(directory):
     else:
         # No subdirectories => just return the file list
         return files
+
 
 def file_type_to_folder(file_type: str) -> str:
     if file_type == 'video':
