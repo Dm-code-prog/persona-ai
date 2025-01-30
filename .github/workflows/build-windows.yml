@@ -17,7 +17,7 @@ jobs:
       - name: Build EXE
         run: pyinstaller --onefile run_app.py
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: run_app.exe
           path: dist/run_app.exe
