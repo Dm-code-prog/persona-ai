@@ -63,7 +63,7 @@ def get_gpu_accelerated_h264_encoder():
         if os_name == "Darwin":  # macOS
             search_terms = ["h264_videotoolbox"]
         elif os_name == "Windows":  # Windows
-            search_terms = ["h264_nvenc", "h264_qsv", "h264_amf"]
+            search_terms = ["h264_nvenc"]
         elif os_name == "Linux":  # Linux
             search_terms = ["h264_vaapi", "h264_nvenc", "h264_qsv"]
         else:
