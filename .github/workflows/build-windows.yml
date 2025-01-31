@@ -17,13 +17,15 @@ jobs:
       - name: Build EXE
         shell: bash
         run: |
+          whisper_path=$(python -c "import whisper, os; print(os.path.dirname(whisper.__file__))")
+          echo "Whisper path: $whisper_path"
           pyinstaller --onefile run_app.py \
           --hidden-import=numba.core.types.old_scalars --hidden-import=numba.core.datamodel.old_models --hidden-import=numba.cpython.old_builtins \
           --hidden-import=numba.core.typing.old_builtins --hidden-import=numba.core.typing.old_cmathdecl --hidden-import=numba.core.typing.old_mathdecl \
           --hidden-import=numba.cpython.old_hashing --hidden-import=numba.cpython.old_numbers --hidden-import=numba.cpython.old_tupleobj \
           --hidden-import=numba.np.old_arraymath --hidden-import=numba.np.random.old_distributions --hidden-import=numba.np.random.old_random_methods \
           --hidden-import=numba.cpython.old_mathimpl --hidden-import=numba.core.old_boxing \
-          --add-data ".venv/lib/python3.12/site-packages/whisper:whisper/"
+          --add-data "${whisper_path}:whisper/"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
