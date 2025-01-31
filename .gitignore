@@ -11,3 +11,22 @@ http/
 
 node_modules/
 trust.py
+
+__pycache__/
+
+*.mp4
+*.mp4
+*.srt
+*.txt
+*.exe
+*.png
+*.ico
+*.jpeg
+*.gif
+
+dist/
+input/
+output/
+build/
+.DS_Store
+*.spec
