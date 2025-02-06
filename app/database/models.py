@@ -6,24 +6,6 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 
-class TOP5PipelineRecord(Base):
-    __tablename__ = 'top5_pipelines'
-
-    id = Column(UUID, primary_key=True, index=True, default=uuid.uuid4)
-    name = Column(String, unique=True)
-    script = Column(String)
-    status = Column(String, default="created")
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-
-    subtitle_color = Column(String)
-    subtitle_highlight_color = Column(String)
-
-    volume_adjustment = Column(Integer)
-
-    logs = Column(String)
-
-
 class ProjectRecord(Base):
     __tablename__ = 'projects'
 
@@ -53,3 +35,17 @@ class SecretRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String)
     value = Column(String)
+
+
+class TrackedYouTubeChannelRecord(Base):
+    __tablename__ = 'analytics_tracked_youtube_channels'
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(String)
+    channel_name = Column(String)
+    channel_url = Column(String)
+    
+    tag = Column(String)
+
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

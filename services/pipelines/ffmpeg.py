@@ -2,6 +2,7 @@ import json
 import shlex
 import subprocess
 import platform
+import re
 
 
 def build_concat_cmd(input_file_paths: list[str], output_file_path: str) -> list[str]:
@@ -359,6 +360,56 @@ def loop_video(video_path: str, loop_count: int, output_path: str):
         raise RuntimeError(f"ffmpeg command failed with error: {e.stderr}")
 
 
+def detect_silence_pauses(media_path: str, noise_threshold: float, duration_threshold: float) -> list[dict]:
+    """
+    Runs ffmpeg with the silencedetect filter on the given media file and returns a list
+    of dictionaries representing the silent pauses. Each dictionary has the keys "start"
+    and "end" which denote the start and end times (in seconds) of the silent section.
+
+    :param media_path: Path to the input media file.
+    :param noise_threshold: The noise threshold in dB (e.g., -30 for -30dB).
+    :param duration_threshold: The minimum duration (in seconds) for silence to be detected.
+    :return: A list of dictionaries, each with {"start": float, "end": float}.
+    """
+    # Build the silencedetect filter string. Example: "silencedetect=noise=-30dB:d=1"
+    filter_str = f"silencedetect=noise={noise_threshold}dB:d={duration_threshold}"
+    
+    # Build the ffmpeg command.
+    # Using -f null - causes ffmpeg to process the input without writing an output file.
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",  # optional: hides extra banner info
+        "-i", media_path,
+        "-af", filter_str,
+        "-f", "null",  # null output format
+        "-"
+    ]
+    
+    # Run the command and capture stderr (where ffmpeg logs silencedetect messages)
+    # Note: We use text=True (or universal_newlines=True) so that the output is str, not bytes.
+    process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    log_output = process.stderr
+
+    pauses = []
+    current_silence_start = None
+
+    # Iterate over each line of the log output
+    for line in log_output.splitlines():
+        # Look for a silence_start message
+        start_match = re.search(r"silence_start: (\d+\.?\d*)", line)
+        if start_match:
+            current_silence_start = float(start_match.group(1))
+        
+        # Look for a silence_end message. This line often also contains a silence_duration value.
+        end_match = re.search(r"silence_end: (\d+\.?\d*)", line)
+        if end_match and current_silence_start is not None:
+            current_silence_end = float(end_match.group(1))
+            pauses.append({"start": current_silence_start, "end": current_silence_end})
+            # Reset the current_silence_start for the next detected pause.
+            current_silence_start = None
+
+    return pauses
+
 def trim_pauses_from_media(
         media_path: str,
         pauses: list[dict],
@@ -495,4 +546,53 @@ def overlay_effect(video_path: str, effect_path: str, blend_mode: str, opacity: 
 
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"ffmpeg command failed with error: {e.stderr}")
+        raise RuntimeError(f"ffmpeg command failed with error: {e.stderr or e.stdout or e.output or e}")
+
+
+
+def overlay_effect_with_scaling(video_path: str, effect_path: str, blend_mode: str, opacity: float,
+                                  video_encoder: str, output_path: str):
+    """
+    Apply an overlay effect to a video using a blend mode.
+    This version scales the second video so that its dimensions match the first video,
+    regardless of their original sizes.
+
+    Parameters:
+        video_path (str): Path to the base video.
+        effect_path (str): Path to the overlay/effect video.
+        blend_mode (str): The blend mode to use (e.g., "screen", "multiply", "overlay").
+        opacity (float): The opacity of the effect video (0.0 to 1.0).
+        video_encoder (str): The video encoder to use (e.g., "libx264").
+        output_path (str): Path where the output video will be saved.
+    """
+    try:
+        # The filter_complex does the following:
+        # 1. "[1:v][0:v]scale2ref=w=ref_w:h=ref_h[effect_scaled][base]"
+        #    scales the first input (effect video, stream [1:v]) to have the same width and height
+        #    as the second input (base video, stream [0:v]). The scaled effect is labeled [effect_scaled],
+        #    while the base video is labeled [base].
+        #
+        # 2. "[base][effect_scaled]blend=all_mode='{blend_mode}':all_opacity={opacity}[outv]"
+        #    blends the two streams using the specified blend mode and opacity.
+        filter_complex = (
+            f"[1:v][0:v]scale2ref=w=ref_w:h=ref_h[effect_scaled][base];"
+            f"[base][effect_scaled]blend=all_mode='{blend_mode}':all_opacity={opacity}[outv]"
+        )
+
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-i", video_path,
+            "-i", effect_path,
+            "-filter_complex", filter_complex,
+            "-map", "0:a?",        # Copy audio from the base video (if any)
+            "-map", "[outv]",       # Use the blended video as output
+            "-c:a", "copy",
+            "-c:v", video_encoder,
+            output_path
+        ]
+
+        print("Running ffmpeg:\n", " ".join(shlex.quote(arg) for arg in cmd))
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        # If ffmpeg fails, include the error details in the exception.
+        raise RuntimeError(f"ffmpeg command failed with error: {e.stderr or e.stdout or e.output or e}")

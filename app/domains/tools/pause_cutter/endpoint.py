@@ -9,11 +9,10 @@ import pydantic
 import sqlalchemy.orm as orm
 
 import app.database.database as database
-from app.config import MEDIA_PATH
+from app.config import PROJECTS_PATH
 from services.tools.pause_cutter.pause_cutter import PauseCutter
 
 import app.domains.projects.crud as projects_crud
-from utils.thread_runner import ThreadRunner
 
 tool_name = 'pause_cutter'
 
@@ -36,7 +35,7 @@ def run_pause_cutter_tool_thread(
 ):
     try:
         pause_cutter = PauseCutter(
-            working_dir=os.path.join(MEDIA_PATH, 'projects', str(project_id)),
+            working_dir=os.path.join(PROJECTS_PATH, str(project_id)),
             whisper_model=request.whisper_model,
         )
 
@@ -73,12 +72,6 @@ async def run_pause_cutter_tool(
         daemon=True,
     ).start()
 
-    # thread_runner = ThreadRunner(
-    #     func=run_pause_cutter_tool_thread,
-    #     timeout=180
-    # )
-    #
-    # thread_runner.run(project_id, request, db)
 
     return {
         'id': task.id,

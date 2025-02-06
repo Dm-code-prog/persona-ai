@@ -9,7 +9,7 @@ import fastapi.responses as responses
 import pydantic
 import sqlalchemy.orm as orm
 
-from app.config import MEDIA_PATH
+from app.config import PROJECTS_PATH
 from app.database import database
 import app.domains.projects.crud as crud
 
@@ -31,15 +31,15 @@ class CreateNewProjectResponse(pydantic.BaseModel):
 async def create_new_project(request: CreateNewProjectRequest, db: orm.Session = fastapi.Depends(database.get_db)):
     record = crud.create_project(db, request.name)
 
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id)))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input'))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'videos'))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'photos'))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'music'))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'video_effects'))
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'input', 'sound_effects'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id)))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input', 'videos'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input', 'photos'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input', 'music'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input', 'video_effects'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input', 'sound_effects'))
 
-    os.makedirs(os.path.join(MEDIA_PATH, 'projects', str(record.id), 'output'))
+    os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'output'))
 
     return {
         'id': record.id,
@@ -115,7 +115,7 @@ def get_project_tasks(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(d
 
 @router.get('/{project_id}/files', tags=['Projects'])
 def list_project_files(project_id: uuid.UUID):
-    files = list_files(os.path.join(MEDIA_PATH, 'projects', str(project_id)))
+    files = list_files(os.path.join(PROJECTS_PATH, str(project_id)))
 
     return files
 
@@ -127,7 +127,7 @@ async def upload_project_file(
         file_type: str = fastapi.Form(...),
 ):
     folder = file_type_to_folder(file_type)
-    file_path = os.path.join(MEDIA_PATH, 'projects', str(project_id), 'input', folder, file.filename)
+    file_path = os.path.join(PROJECTS_PATH, str(project_id), 'input', folder, file.filename)
     with open(file_path, 'wb') as f:
         f.write(await file.read())
 
@@ -137,8 +137,16 @@ def download_file(
         project_id: str,
         file_path: str
 ):
-    file_path = os.path.join(MEDIA_PATH, 'projects', str(project_id), file_path)
+    file_path = os.path.join(PROJECTS_PATH, str(project_id), file_path)
     return responses.FileResponse(path=file_path)
+
+@router.delete('/{project_id}/files/delete', tags=['Projects'])
+def delete_file(
+        project_id: str,
+        file_path: str
+):
+    file_path = os.path.join(PROJECTS_PATH, str(project_id), file_path)
+    os.remove(file_path)
 
 
 def list_files(directory):
