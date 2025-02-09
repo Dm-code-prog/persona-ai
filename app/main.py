@@ -9,8 +9,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import app.domains.secrets.endpoint as secrets
 import app.domains.projects.endpoint as projects
-import app.domains.tools.pause_cutter.endpoint as pause_cutter
-import app.domains.tools.video_unifier.endpoint as video_unifier
 import app.domains.analytics.youtube_channel_tracker.endpoint as youtube_channel_tracker
 
 app = fastapi.FastAPI()
@@ -34,8 +32,8 @@ app.include_router(secrets.router, prefix='/api/secrets')
 app.include_router(projects.router, prefix='/api/projects')
 app.include_router(youtube_channel_tracker.router, prefix='/api/analytics/youtube_channel_tracker')
 
-app.include_router(pause_cutter.router, prefix='/api/tools/pause_cutter')
-app.include_router(video_unifier.router, prefix='/api/tools/video_unifier')
+# app.include_router(pause_cutter.router, prefix='/api/tools/pause_cutter')
+# app.include_router(video_unifier.router, prefix='/api/tools/video_unifier')
 
 @app.get('/ping')
 async def ping():
