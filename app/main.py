@@ -1,7 +1,11 @@
 import logging
+import os
+import jwt
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 import app.domains.secrets.endpoint as secrets
 import app.domains.projects.endpoint as projects

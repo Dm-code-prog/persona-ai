@@ -6,14 +6,14 @@ from fastapi import HTTPException
 
 import app.database.database as database
 import app.domains.secrets.crud as crud
-
+from app.auth import get_current_user
 router = fastapi.APIRouter()
 
 
 @router.put('/put', tags=['Secrets'])
-def put_secret(key: str, value: str, db: orm.Session = fastapi.Depends(database.get_db)):
+def put_secret(key: str, value: str, db: orm.Session = fastapi.Depends(database.get_db), user: dict = fastapi.Depends(get_current_user)): 
     try:
-        crud.set_secret(db, key, value)
+        crud.set_secret(db,user['sub'], key, value)
     except Exception as e:
         logging.error("failed to put a secret", e)
 
@@ -26,9 +26,10 @@ def put_secret(key: str, value: str, db: orm.Session = fastapi.Depends(database.
 def get_secret_insecure(
         key: str = fastapi.Query(...),
         db: orm.Session = fastapi.Depends(database.get_db),
+        user: dict = fastapi.Depends(get_current_user)
 ):
     try:
-        record = crud.get_secret(db, key)
+        record = crud.get_secret(db, user['sub'], key)
         if record is None:
             raise HTTPException(status_code=404, detail="Secret not found")
         return {

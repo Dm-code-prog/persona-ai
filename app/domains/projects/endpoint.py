@@ -12,6 +12,7 @@ import sqlalchemy.orm as orm
 from app.config import PROJECTS_PATH
 from app.database import database
 import app.domains.projects.crud as crud
+from app.auth import get_current_user
 
 router = fastapi.APIRouter()
 
@@ -28,8 +29,8 @@ class CreateNewProjectResponse(pydantic.BaseModel):
 
 
 @router.post('/', response_model=CreateNewProjectResponse, tags=['Projects'])
-async def create_new_project(request: CreateNewProjectRequest, db: orm.Session = fastapi.Depends(database.get_db)):
-    record = crud.create_project(db, request.name)
+async def create_new_project(request: CreateNewProjectRequest, db: orm.Session = fastapi.Depends(database.get_db), user: dict = fastapi.Depends(get_current_user)):
+    record = crud.create_project(db, user['sub'], request.name)
 
     os.makedirs(os.path.join(PROJECTS_PATH, str(record.id)))
     os.makedirs(os.path.join(PROJECTS_PATH, str(record.id), 'input'))
@@ -57,8 +58,8 @@ class GetProjectResponse(pydantic.BaseModel):
 
 
 @router.get('/{project_id}', response_model=GetProjectResponse, tags=['Projects'])
-async def get_project(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(database.get_db)):
-    project = crud.get_project_by_id(db, project_id)
+async def get_project(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(database.get_db), user: dict = fastapi.Depends(get_current_user)):
+    project = crud.get_project_by_id(db, user['sub'], project_id)
 
     return {
         'id': project.id,
@@ -69,8 +70,8 @@ async def get_project(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(d
 
 
 @router.get('/', response_model=list[GetProjectResponse], tags=['Projects'])
-async def get_projects(db: orm.Session = fastapi.Depends(database.get_db)):
-    projects = crud.get_projects(db)
+async def get_projects(db: orm.Session = fastapi.Depends(database.get_db), user: dict = fastapi.Depends(get_current_user)):
+    projects = crud.get_projects(db, user['sub'])
 
     return [
         {
@@ -97,8 +98,8 @@ class GetProjectTasksResponse(pydantic.BaseModel):
 
 
 @router.get('/{project_id}/tasks', response_model=list[GetProjectTasksResponse], tags=['Projects'])
-def get_project_tasks(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(database.get_db)):
-    tasks = crud.get_tasks_by_project_id(db, project_id)
+def get_project_tasks(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(database.get_db), user: dict = fastapi.Depends(get_current_user)):
+    tasks = crud.get_tasks_by_project_id(db, user['sub'], project_id)
 
     return [{
         'id': record.id,
@@ -114,7 +115,7 @@ def get_project_tasks(project_id: uuid.UUID, db: orm.Session = fastapi.Depends(d
 
 
 @router.get('/{project_id}/files', tags=['Projects'])
-def list_project_files(project_id: uuid.UUID):
+def list_project_files(project_id: uuid.UUID, user: dict = fastapi.Depends(get_current_user)):  
     files = list_files(os.path.join(PROJECTS_PATH, str(project_id)))
 
     return files
@@ -125,6 +126,7 @@ async def upload_project_file(
         project_id: uuid.UUID,
         file: fastapi.UploadFile = fastapi.File(...),
         file_type: str = fastapi.Form(...),
+        user: dict = fastapi.Depends(get_current_user)
 ):
     folder = file_type_to_folder(file_type)
     file_path = os.path.join(PROJECTS_PATH, str(project_id), 'input', folder, file.filename)
@@ -134,16 +136,18 @@ async def upload_project_file(
 
 @router.get('/{project_id}/files/download', tags=['Projects'])
 def download_file(
-        project_id: str,
-        file_path: str
+        project_id: uuid.UUID,
+        file_path: str,
+        user: dict = fastapi.Depends(get_current_user)
 ):
     file_path = os.path.join(PROJECTS_PATH, str(project_id), file_path)
     return responses.FileResponse(path=file_path)
 
 @router.delete('/{project_id}/files/delete', tags=['Projects'])
 def delete_file(
-        project_id: str,
-        file_path: str
+        project_id: uuid.UUID,
+        file_path: str,
+        user: dict = fastapi.Depends(get_current_user)
 ):
     file_path = os.path.join(PROJECTS_PATH, str(project_id), file_path)
     os.remove(file_path)

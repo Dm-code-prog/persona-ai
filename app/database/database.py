@@ -1,22 +1,26 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.config import DATA_PATH
-from app.database.migrations import migrate
 from app.database.models import Base
 
-DB_PATH = f"sqlite:///{DATA_PATH}/database.db"
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv() 
+
+DB_DSN = os.getenv("DB_DSN") 
+
+if not DB_DSN:
+    raise ValueError("DB_DSN is not set")
 
 engine = create_engine(
-    DB_PATH,
-    connect_args={"check_same_thread": False}  # Needed for SQLite in a multi-thread environment
+    DB_DSN,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base.metadata.create_all(bind=engine)
-
-migrate(engine)
 
 
 def get_db():

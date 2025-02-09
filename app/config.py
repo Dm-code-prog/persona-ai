@@ -3,6 +3,8 @@ import os
 from platformdirs import user_data_dir
 from os.path import join
 
+FRONT_END_URL = os.environ.get("FRONT_END_URL")
+
 DATA_PATH = join(user_data_dir('persona_ai', ensure_exists=True), 'data')
 MEDIA_PATH = join(user_data_dir('persona_ai', ensure_exists=True), 'data', 'media')
 PROJECTS_PATH = join(MEDIA_PATH, 'projects')

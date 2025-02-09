@@ -25,6 +25,7 @@ class RunRequest(pydantic.BaseModel):
     whisper_model: str = 'small'
 
     video_name: str
+    output_name: str
 
 
 def run_pause_cutter_tool_thread(
@@ -41,6 +42,7 @@ def run_pause_cutter_tool_thread(
 
         pause_cutter.run(
             video_name=request.video_name,
+            output_name=request.output_name,
             pause_threshold=request.pause_threshold,
             pad=request.pause_padding
         )

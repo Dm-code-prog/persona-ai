@@ -16,7 +16,7 @@ class PauseCutter:
 
         self.whisper = whisper.load_model(whisper_model)
 
-    def run(self, video_name: str, pause_threshold=0.5, pad=0.1):
+    def run(self, video_name: str,output_name: str, pause_threshold=0.5, pad=0.1):
         video_encoder = ffmpeg.get_gpu_accelerated_h264_encoder()
         if video_encoder is None:
             video_encoder = "libx264"
@@ -29,12 +29,12 @@ class PauseCutter:
             word_timestamps=True
         )
 
-        words, pauses = detect_pauses(get_word_timings(transcription), threshold=pause_threshold, pad=pad)
+        _, pauses = detect_pauses(get_word_timings(transcription), threshold=pause_threshold, pad=pad)
 
         ffmpeg.trim_pauses_from_media(
             media_path=os.path.join(self.working_dir, 'input', 'videos', video_name),
             pauses=pauses,
-            output_path=os.path.join(self.working_dir, 'output', video_name),
+            output_path=os.path.join(self.working_dir, 'output', output_name),
             video_codec=video_encoder,
             audio_codec=audio_encoder
         )
