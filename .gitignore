@@ -1,6 +1,7 @@
 .idea/
 .venv
 .env
+.env.local
 
 **.mp3
 **.mp4
